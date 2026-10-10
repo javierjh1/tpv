@@ -116,7 +116,7 @@ body{height:100vh!important;height:100dvh!important;height:var(--app-h,100dvh)!i
           <button id="orders-view-all" onclick="setOrdersView('all')" class="px-2 py-0.5 rounded-md">Todos</button>
         </div>
       </div>
-      <button onclick="clearDeliveredOrders()" class="text-[11px] text-red-600 font-semibold hover:underline">Limpiar Completados</button>
+      <button onclick="requirePin(clearDeliveredOrders)" class="text-[11px] text-red-600 font-semibold hover:underline">Limpiar Completados</button>
     </div>
     <div class="flex-1 overflow-y-auto pb-24 space-y-3 pr-1" id="orders-list-container"></div>
   </div>
@@ -137,7 +137,7 @@ body{height:100vh!important;height:100dvh!important;height:var(--app-h,100dvh)!i
   <div id="tab-config-content" class="hidden flex-1 flex flex-col h-full overflow-hidden bg-white p-4">
     <div class="flex justify-between items-center mb-3 pb-2 border-b">
       <h2 class="text-base font-bold"><i class="fa-solid fa-boxes-stacked mr-2 text-[#1B4D3E]"></i>Gestión de Productos</h2>
-      <button onclick="openProductModal()" class="bg-[#1B4D3E] hover:bg-[#12362b] text-[#D4AF37] px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center space-x-1 border border-[#D4AF37]/30"><i class="fa-solid fa-plus"></i><span>Nuevo</span></button>
+      <button onclick="requirePin(()=>openProductModal())" class="bg-[#1B4D3E] hover:bg-[#12362b] text-[#D4AF37] px-3 py-1.5 rounded-xl text-xs font-bold shadow flex items-center space-x-1 border border-[#D4AF37]/30"><i class="fa-solid fa-plus"></i><span>Nuevo</span></button>
     </div>
     <div class="flex-1 overflow-y-auto pb-20 space-y-2.5 pr-1" id="config-products-list"></div>
     <div class="mt-2 pt-2 border-t border-slate-200 flex-shrink-0">
@@ -146,11 +146,12 @@ body{height:100vh!important;height:100dvh!important;height:var(--app-h,100dvh)!i
         <span id="sync-dot" class="text-[10px] font-semibold text-slate-400">Conectando...</span>
       </div>
       <p id="sync-status" class="text-[10px] text-red-500 mt-1"></p>
+      <button onclick="requirePin(openPassModal)" class="w-full mt-2 flex items-center justify-between bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700"><span><i class="fa-solid fa-lock mr-2 text-[#1B4D3E]"></i>Cambiar contraseña</span><i class="fa-solid fa-chevron-right text-[10px] text-slate-400"></i></button>
     </div>
     <div class="mt-3 pt-2 border-t border-slate-200 flex-shrink-0">
       <div class="flex justify-between items-center mb-1">
         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">Resumen de Caja</h3>
-        <button onclick="resetSalesHistory()" class="text-[11px] text-red-600 hover:underline">Reiniciar Caja</button>
+        <button onclick="requirePin(resetSalesHistory)" class="text-[11px] text-red-600 hover:underline">Reiniciar Caja</button>
       </div>
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex justify-between items-center">
         <div><span class="text-[10px] text-slate-600 block">Total Recaudado Sesión</span><span id="session-total-sales" class="text-base font-bold text-[#1B4D3E]">0,00 €</span></div>
@@ -294,6 +295,59 @@ body{height:100vh!important;height:100dvh!important;height:var(--app-h,100dvh)!i
   </div>
 </div>
 
+<!-- Modal código (PIN) -->
+<div id="pin-modal" class="hidden fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-xs p-5 shadow-xl text-center">
+    <h3 class="text-sm font-bold mb-1"><i class="fa-solid fa-lock mr-2 text-[#1B4D3E]"></i>Introduce el código PIN</h3>
+    <p class="text-[11px] text-slate-500 mb-3">Esta acción está protegida.</p>
+    <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" class="w-full border-2 border-slate-300 focus:border-[#1B4D3E] focus:outline-none rounded-xl px-3 py-2 text-xl text-center font-bold mb-1" onkeydown="if(event.key==='Enter')submitPin()">
+    <p id="pin-error" class="text-[11px] text-red-600 h-4 mb-1"></p>
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="closePin()" class="bg-slate-100 text-slate-700 py-2 rounded-xl text-sm font-bold">Cancelar</button>
+      <button onclick="submitPin()" class="bg-[#1B4D3E] text-[#D4AF37] py-2 rounded-xl text-sm font-bold">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal personalizado de confirmación (Sustituye a confirm() nativo) -->
+<div id="custom-confirm-modal" class="hidden fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-xs p-5 shadow-xl text-center animate-fade-in">
+    <div id="confirm-icon-box" class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg"><i class="fa-solid fa-triangle-exclamation"></i></div>
+    <h3 id="confirm-title" class="text-sm font-bold mb-1 text-slate-900">¿Estás seguro?</h3>
+    <p id="confirm-message" class="text-xs text-slate-500 mb-4">Confirma si deseas realizar esta acción.</p>
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="closeCustomConfirm(false)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold">Cancelar</button>
+      <button id="confirm-ok-btn" onclick="closeCustomConfirm(true)" class="bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl text-xs font-bold shadow">Sí, eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal aviso informativo (Sustituye a alert() nativo) -->
+<div id="custom-alert-modal" class="hidden fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-xs p-5 shadow-xl text-center animate-fade-in">
+    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 text-lg"><i class="fa-solid fa-info"></i></div>
+    <h3 class="text-sm font-bold mb-1 text-slate-900">Aviso</h3>
+    <p id="alert-message" class="text-xs text-slate-600 mb-4">Mensaje informativo.</p>
+    <button onclick="closeCustomAlert()" class="w-full bg-[#1B4D3E] hover:bg-[#12362b] text-[#D4AF37] py-2.5 rounded-xl text-xs font-bold shadow border border-[#D4AF37]/30">Aceptar</button>
+  </div>
+</div>
+
+<!-- Modal cambiar contraseña -->
+<div id="pass-modal" class="hidden fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-xs p-5 shadow-xl">
+    <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-key mr-2 text-[#1B4D3E]"></i>Cambiar contraseña</h3>
+    <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Contraseña actual</label>
+    <input id="pass-cur" type="password" inputmode="numeric" autocomplete="off" class="w-full border rounded-xl px-3 py-2 text-sm mb-2">
+    <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Contraseña nueva (solo números)</label>
+    <input id="pass-new" type="password" inputmode="numeric" autocomplete="off" class="w-full border rounded-xl px-3 py-2 text-sm mb-1" onkeydown="if(event.key==='Enter')changePass()">
+    <p id="pass-error" class="text-[11px] text-red-600 h-4 mb-1"></p>
+    <div class="grid grid-cols-2 gap-2">
+      <button onclick="closePassModal()" class="bg-slate-100 text-slate-700 py-2 rounded-xl text-sm font-bold">Cancelar</button>
+      <button onclick="changePass()" class="bg-[#1B4D3E] text-[#D4AF37] py-2 rounded-xl text-sm font-bold">Cambiar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ==================== FIREBASE ====================
 const firebaseConfig = {
@@ -339,6 +393,30 @@ const sameUser = (a, b) => String(a || '').trim().toLowerCase() === String(b || 
 const isMine = o => !!o.createdBy && sameUser(o.createdBy, userName);
 const canEdit = o => !o.createdBy || sameUser(o.createdBy, userName);
 
+// ==================== MODALES PERSONALIZADOS (SIN ALERTAS NATIVAS) ====================
+let customConfirmCb = null;
+function showConfirm(title, message, btnText, cb) {
+  customConfirmCb = cb;
+  $('confirm-title').textContent = title || '¿Estás seguro?';
+  $('confirm-message').textContent = message || '';
+  $('confirm-ok-btn').textContent = btnText || 'Aceptar';
+  $('custom-confirm-modal').classList.remove('hidden');
+}
+function closeCustomConfirm(res) {
+  $('custom-confirm-modal').classList.add('hidden');
+  const cb = customConfirmCb;
+  customConfirmCb = null;
+  if (cb) cb(res);
+}
+
+function showAlert(msg) {
+  $('alert-message').textContent = msg || '';
+  $('custom-alert-modal').classList.remove('hidden');
+}
+function closeCustomAlert() {
+  $('custom-alert-modal').classList.add('hidden');
+}
+
 // ==================== SINCRONIZACIÓN ====================
 function setSync(ok, msg) {
   const d = $('sync-dot');
@@ -360,6 +438,8 @@ let listening = false;
 function startListening() {
   if (listening) return;
   listening = true;
+
+  R('config/pin').on('value', s => { tpvPin = s.val() ? String(s.val()) : '123'; });
 
   R('products').on('value', s => {
     const v = parse(s.val());
@@ -393,6 +473,35 @@ function startListening() {
 db.ref('.info/connected').on('value', s => setSync(s.val() === true));
 firebase.auth().onAuthStateChanged(u => { if (u) startListening(); });
 firebase.auth().signInAnonymously().catch(e => setSync(false, 'Error de acceso: ' + e.message));
+
+// ==================== CÓDIGO DE SEGURIDAD ====================
+let tpvPin = '123', pinCb = null;
+function requirePin(cb) {
+  pinCb = cb;
+  $('pin-input').value = ''; $('pin-error').textContent = '';
+  $('pin-modal').classList.remove('hidden');
+  setTimeout(() => $('pin-input').focus(), 50);
+}
+function closePin() { $('pin-modal').classList.add('hidden'); pinCb = null; }
+function submitPin() {
+  if ($('pin-input').value === tpvPin) { const cb = pinCb; closePin(); if (cb) cb(); }
+  else { $('pin-error').textContent = 'Código incorrecto'; $('pin-input').value = ''; }
+}
+function openPassModal() {
+  $('pass-cur').value = ''; $('pass-new').value = ''; $('pass-error').textContent = '';
+  $('pass-modal').classList.remove('hidden');
+  setTimeout(() => $('pass-cur').focus(), 50);
+}
+function closePassModal() { $('pass-modal').classList.add('hidden'); }
+function changePass() {
+  const cur = $('pass-cur').value, nw = $('pass-new').value.trim();
+  if (cur !== tpvPin) { $('pass-error').textContent = 'La contraseña actual no es correcta'; return; }
+  if (!/^\d{3,12}$/.test(nw)) { $('pass-error').textContent = 'Usa entre 3 y 12 números'; return; }
+  R('config/pin').set(nw);
+  tpvPin = nw;
+  closePassModal();
+  showAlert('Contraseña cambiada correctamente en todos los dispositivos.');
+}
 
 // ==================== NOMBRE ====================
 function openNameModal(force) {
@@ -432,7 +541,7 @@ window.onload = function () {
   filterCategory('todos');
   updateCartUI();
   updateBadges();
-  $('user-name-label').textContent = userName;
+  \$('user-name-label').textContent = userName;
   if (!userName) openNameModal(true);
   setInterval(cleanupDelivered, 5000);
 };
@@ -442,8 +551,7 @@ const NAV = { sales: 'nav-sales', cart: 'nav-cart-tab', orders: 'nav-orders', ta
 function switchTab(tab) {
   if (tab === 'orders') ordersView = 'mine';
   for (const t in NAV) {
-    $('tab-' + t + '-content').classList.toggle('hidden', t !== tab);
-    $(NAV[t]).className = 'w-8 h-8 rounded-lg flex items-center justify-center transition-colors relative ' + (t === tab ? 'bg-[#D4AF37] text-[#1B4D3E] font-bold shadow' : 'text-amber-200 hover:text-white');
+    $('tab-' + t + '-content').classList.toggle('hidden', t !== tab);$(NAV[t]).className = 'w-8 h-8 rounded-lg flex items-center justify-center transition-colors relative ' + (t === tab ? 'bg-[#D4AF37] text-[#1B4D3E] font-bold shadow' : 'text-amber-200 hover:text-white');
   }
   ({ sales: renderProducts, cart: renderCartDetails, orders: renderOrders, tabs: renderOpenTabs, config: () => { renderConfigProducts(); updateSalesSummary(); } })[tab]();
 }
@@ -459,7 +567,7 @@ function filterCategory(category) {
 
 // ==================== VENTA / CARRITO ====================
 function renderProducts() {
-  const grid = $('products-grid');
+  const grid = \$('products-grid');
   grid.innerHTML = '';
   const filtered = currentCategoryFilter === 'todos' ? products : products.filter(p => p.category.toLowerCase() === currentCategoryFilter.toLowerCase());
   if (!filtered.length) {
@@ -474,14 +582,14 @@ function renderProducts() {
     card.innerHTML = `
       <div class="flex justify-between items-start mb-2">
         <span class="text-3xl p-1.5 bg-amber-50 rounded-xl">${p.icon}</span>
-        ${qty > 0 ? `<span onclick="event.stopPropagation(); openQuantityModal(${p.id})" class="bg-[#1B4D3E] text-[#D4AF37] text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow cursor-pointer">${qty} ✏️</span>` : ''}
+        ${qty > 0 ? `<span onclick="event.stopPropagation(); openQuantityModal(\${p.id})" class="bg-[#1B4D3E] text-[#D4AF37] text-xs font-extrabold px-2.5 py-0.5 rounded-full shadow cursor-pointer">\${qty} ✏️</span>` : ''}
       </div>
       <div>
         <h3 class="font-bold text-slate-800 text-xs mb-1 leading-tight">${esc(p.name)}</h3>
         <div class="flex justify-between items-center mt-2">
           <span class="text-[#1B4D3E] font-extrabold text-sm">${eur(p.price)}</span>
           <div class="flex space-x-1">
-            ${qty > 0 ? `<button onclick="event.stopPropagation(); decreaseCart(${p.id})" class="w-6 h-6 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center justify-center text-xs font-bold"><i class="fa-solid fa-minus"></i></button>` : ''}
+            ${qty > 0 ? `<button onclick="event.stopPropagation(); decreaseCart(\${p.id})" class="w-6 h-6 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center justify-center text-xs font-bold"><i class="fa-solid fa-minus"></i></button>` : ''}
             <button onclick="event.stopPropagation(); addToCart(${p.id})" class="w-6 h-6 bg-amber-100 hover:bg-amber-200 text-[#1B4D3E] rounded-lg flex items-center justify-center text-xs font-bold"><i class="fa-solid fa-plus"></i></button>
           </div>
         </div>
@@ -506,19 +614,18 @@ function getCartTotal() {
 
 function updateCartUI() {
   const { total, count } = getCartTotal();
-  $('cart-badge').textContent = count;
-  const hb = $('header-cart-badge');
+  \$('cart-badge').textContent = count;
+  const hb = \$('header-cart-badge');
   hb.textContent = count;
   hb.classList.toggle('hidden', count <= 0);
   hb.classList.toggle('flex', count > 0);
-  $('cart-item-count').textContent = `${count} producto${count !== 1 ? 's' : ''}`;
-  $('cart-total').textContent = eur(total);
-  $('cart-total-tab').textContent = eur(total);
-  ['checkout-btn-tab', 'open-tab-btn-tab'].forEach(id => { if (count > 0) $(id).removeAttribute('disabled'); else $(id).setAttribute('disabled', 'true'); });
+  \$('cart-item-count').textContent = `${count} producto${count !== 1 ? 's' : ''}`;
+  $('cart-total').textContent = eur(total);$('cart-total-tab').textContent = eur(total);
+  ['checkout-btn-tab', 'open-tab-btn-tab'].forEach(id => { if (count > 0) $(id).removeAttribute('disabled'); else$(id).setAttribute('disabled', 'true'); });
 }
 
 function renderCartDetails() {
-  const list = $('cart-items-list');
+  const list = \$('cart-items-list');
   list.innerHTML = '';
   const entries = Object.entries(cart);
   if (!entries.length) {
@@ -550,16 +657,16 @@ function renderCartDetails() {
 function openQuantityModal(id) {
   const p = products.find(p => p.id == id);
   if (!p) return;
-  $('qty-modal-product-id').value = id;
-  $('qty-modal-product-name').textContent = p.name;
-  $('qty-modal-input').value = cart[id] || 1;
-  $('quantity-modal').classList.remove('hidden');
-  setTimeout(() => $('qty-modal-input').focus(), 100);
+  \$('qty-modal-product-id').value = id;
+  \$('qty-modal-product-name').textContent = p.name;
+  \$('qty-modal-input').value = cart[id] || 1;
+  \$('quantity-modal').classList.remove('hidden');
+  setTimeout(() => \$('qty-modal-input').focus(), 100);
 }
-function closeQuantityModal() { $('quantity-modal').classList.add('hidden'); }
+function closeQuantityModal() { \$('quantity-modal').classList.add('hidden'); }
 function saveDirectQuantity() {
-  const id = parseInt($('qty-modal-product-id').value);
-  const q = parseInt($('qty-modal-input').value);
+  const id = parseInt(\$('qty-modal-product-id').value);
+  const q = parseInt(\$('qty-modal-input').value);
   if (isNaN(q) || q <= 0) delete cart[id]; else cart[id] = q;
   closeQuantityModal();
   refreshCart();
@@ -569,13 +676,11 @@ function saveDirectQuantity() {
 function openCheckoutModal(preset) {
   const { total } = getCartTotal();
   if (total <= 0) return;
-  $('modal-total-display').textContent = eur(total);
-  $('cash-given').value = '';
-  $('order-customer-name').value = typeof preset === 'string' ? preset : '';
-  $('change-display').textContent = '0,00 €';
-  $('change-status').textContent = 'Introduce efectivo';
-  $('complete-sale-btn').setAttribute('disabled', 'true');
-  const dl = $('existing-checkout-tabs-datalist'), sg = $('existing-checkout-tabs-suggestions');
+  \$('modal-total-display').textContent = eur(total);
+  $('cash-given').value = '';$('order-customer-name').value = typeof preset === 'string' ? preset : '';
+  \$('change-display').textContent = '0,00 €';
+  $('change-status').textContent = 'Introduce efectivo';$('complete-sale-btn').setAttribute('disabled', 'true');
+  const dl = $('existing-checkout-tabs-datalist'), sg =$('existing-checkout-tabs-suggestions');
   dl.innerHTML = ''; sg.innerHTML = '';
   openTabs.forEach(tab => {
     const o = document.createElement('option'); o.value = tab.name; dl.appendChild(o);
@@ -583,21 +688,21 @@ function openCheckoutModal(preset) {
     b.type = 'button';
     b.className = 'px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-[#1B4D3E] rounded-md text-[11px] font-bold';
     b.textContent = `${tab.name} (${eur(tab.total)})`;
-    b.onclick = () => { $('order-customer-name').value = tab.name; };
+    b.onclick = () => { \$('order-customer-name').value = tab.name; };
     sg.appendChild(b);
   });
-  $('checkout-modal').classList.remove('hidden');
-  setTimeout(() => $('cash-given').focus(), 100);
+  \$('checkout-modal').classList.remove('hidden');
+  setTimeout(() => \$('cash-given').focus(), 100);
 }
-function closeCheckoutModal() { $('checkout-modal').classList.add('hidden'); }
+function closeCheckoutModal() { \$('checkout-modal').classList.add('hidden'); }
 function addCash(a) { $('cash-given').value = ((parseFloat($('cash-given').value) || 0) + a).toFixed(2); calculateChange(); }
-function setExactCash() { $('cash-given').value = getCartTotal().total.toFixed(2); calculateChange(); }
-function clearCash() { $('cash-given').value = ''; calculateChange(); }
+function setExactCash() { \$('cash-given').value = getCartTotal().total.toFixed(2); calculateChange(); }
+function clearCash() { \$('cash-given').value = ''; calculateChange(); }
 
 function calculateChange() {
   const { total } = getCartTotal();
-  const cash = parseFloat($('cash-given').value) || 0;
-  const disp = $('change-display'), st = $('change-status'), btn = $('complete-sale-btn');
+  const cash = parseFloat(\$('cash-given').value) || 0;
+  const disp = \$('change-display'), st = $('change-status'), btn =$('complete-sale-btn');
   const diff = Math.round((cash - total) * 100) / 100;
   if (cash <= 0) {
     disp.textContent = '0,00 €'; st.textContent = 'Introduce efectivo';
@@ -612,11 +717,11 @@ function calculateChange() {
 }
 
 async function completeSale() {
-  $('complete-sale-btn').setAttribute('disabled', 'true');
+  \$('complete-sale-btn').setAttribute('disabled', 'true');
   const { total } = getCartTotal();
-  const cash = parseFloat($('cash-given').value) || 0;
+  const cash = parseFloat(\$('cash-given').value) || 0;
   const change = cash - total;
-  const customer = $('order-customer-name').value.trim() || 'Cliente General';
+  const customer = \$('order-customer-name').value.trim() || 'Cliente General';
   const snap = { ...cart };
   const date = new Date().toLocaleString();
 
@@ -641,31 +746,30 @@ async function completeSale() {
   t += `<div class="flex justify-between text-slate-600"><span>Entregado:</span><span>${eur(cash)}</span></div>`;
   t += `<div class="flex justify-between text-emerald-700 font-bold"><span>Cambio:</span><span>${eur(change)}</span></div>`;
 
-  $('receipt-details').innerHTML = t;
-  $('receipt-order-num').textContent = `Pedido #${id} (${customer})`;
-  $('receipt-change-text').textContent = `Cambio a devolver: ${eur(change)}`;
+  \$('receipt-details').innerHTML = t;
+  \$('receipt-order-num').textContent = `Pedido #${id} (${customer})`;
+  \$('receipt-change-text').textContent = `Cambio a devolver: ${eur(change)}`;
   closeCheckoutModal();
-  $('receipt-modal').classList.remove('hidden');
+  \$('receipt-modal').classList.remove('hidden');
   cart = {};
   refreshCart();
 }
-function closeReceiptModal() { $('receipt-modal').classList.add('hidden'); switchTab('orders'); }
+function closeReceiptModal() { \$('receipt-modal').classList.add('hidden'); switchTab('orders'); }
 
 // ==================== CUENTAS (FIADOS) ====================
 function openOpenTabModal() {
   const { total } = getCartTotal();
   if (total <= 0) return;
-  $('open-tab-modal-total').textContent = eur(total);
-  $('open-tab-name-input').value = '';
+  $('open-tab-modal-total').textContent = eur(total);$('open-tab-name-input').value = '';
   renderTabPicker();
-  $('open-tab-modal').classList.remove('hidden');
+  \$('open-tab-modal').classList.remove('hidden');
 }
-function closeOpenTabModal() { $('open-tab-modal').classList.add('hidden'); }
+function closeOpenTabModal() { \$('open-tab-modal').classList.add('hidden'); }
 
 function renderTabPicker() {
-  const box = $('existing-tabs-suggestions'), dl = $('existing-tabs-datalist');
+  const box = $('existing-tabs-suggestions'), dl =$('existing-tabs-datalist');
   if (!box) return;
-  const typed = ($('open-tab-name-input').value || '').trim().toLowerCase();
+  const typed = (\$('open-tab-name-input').value || '').trim().toLowerCase();
   dl.innerHTML = ''; box.innerHTML = '';
   if (!openTabs.length) {
     box.innerHTML = '<p class="text-[11px] text-slate-400 py-2 text-center">No hay cuentas abiertas. Escribe un nombre para crear una nueva.</p>';
@@ -684,14 +788,14 @@ function renderTabPicker() {
     const sp = b.querySelectorAll('span');
     sp[1].textContent = who + last;
     sp[2].textContent = eur(tab.total);
-    b.onclick = () => { $('open-tab-name-input').value = tab.name; renderTabPicker(); };
+    b.onclick = () => { \$('open-tab-name-input').value = tab.name; renderTabPicker(); };
     box.appendChild(b);
   });
 }
 
 async function confirmSaveOpenTab() {
-  const name = $('open-tab-name-input').value.trim();
-  if (!name) { alert('Introduce un nombre para la cuenta.'); return; }
+  const name = \$('open-tab-name-input').value.trim();
+  if (!name) { showAlert('Introduce un nombre para la cuenta.'); return; }
   const { total } = getCartTotal();
   const snap = { ...cart };
   const add = Object.entries(snap).map(([id, q]) => ({ productId: parseInt(id), quantity: q }));
@@ -727,9 +831,9 @@ async function confirmSaveOpenTab() {
 }
 
 function renderOpenTabs() {
-  const c = $('open-tabs-list-container');
+  const c = \$('open-tabs-list-container');
   c.innerHTML = '';
-  $('open-tabs-count-badge').textContent = `${openTabs.length} abierta${openTabs.length !== 1 ? 's' : ''}`;
+  \$('open-tabs-count-badge').textContent = `${openTabs.length} abierta${openTabs.length !== 1 ? 's' : ''}`;
   if (!openTabs.length) {
     c.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-book-open text-4xl mb-2"></i><p class="text-xs">No hay cuentas abiertas / fiados</p></div>`;
     return;
@@ -752,15 +856,17 @@ function renderOpenTabs() {
       </div>
       <div class="space-y-1 mb-3">${items}</div>
       <div class="grid grid-cols-2 gap-2">
-        <button onclick="deleteOpenTab('${tab.key}')" class="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">Eliminar</button>
+        <button onclick="requirePin(()=>promptDeleteOpenTab('${tab.key}'))" class="py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold">Eliminar</button>
         <button onclick="payOpenTab('${tab.key}')" class="py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center space-x-1"><i class="fa-solid fa-cash-register"></i><span>Cobrar Cuenta</span></button>
       </div>`;
     c.appendChild(card);
   });
 }
 
-function deleteOpenTab(key) {
-  if (confirm('¿Deseas eliminar esta cuenta abierta sin cobrar?')) R('tabs/' + key).remove();
+function promptDeleteOpenTab(key) {
+  showConfirm('Eliminar cuenta abierta', '¿Deseas eliminar esta cuenta abierta sin cobrar?', 'Eliminar', ok => {
+    if (ok) R('tabs/' + key).remove();
+  });
 }
 function payOpenTab(key) {
   const tab = openTabs.find(t => t.key === key);
@@ -773,10 +879,10 @@ function payOpenTab(key) {
 
 // ==================== PEDIDOS ====================
 function renderOrders() {
-  const c = $('orders-list-container');
+  const c = \$('orders-list-container');
   c.innerHTML = '';
-  $('orders-view-mine').className = 'px-2 py-0.5 rounded-md ' + (ordersView === 'mine' ? 'bg-[#1B4D3E] text-[#D4AF37]' : 'text-slate-600');
-  $('orders-view-all').className = 'px-2 py-0.5 rounded-md ' + (ordersView === 'all' ? 'bg-[#1B4D3E] text-[#D4AF37]' : 'text-slate-600');
+  \$('orders-view-mine').className = 'px-2 py-0.5 rounded-md ' + (ordersView === 'mine' ? 'bg-[#1B4D3E] text-[#D4AF37]' : 'text-slate-600');
+  \$('orders-view-all').className = 'px-2 py-0.5 rounded-md ' + (ordersView === 'all' ? 'bg-[#1B4D3E] text-[#D4AF37]' : 'text-slate-600');
   const visible = ordersView === 'mine' ? orders.filter(isMine) : orders;
   if (!visible.length) {
     c.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-clipboard-list text-4xl mb-2"></i><p class="text-xs">No hay pedidos registrados</p></div>`;
@@ -817,7 +923,7 @@ function renderOrders() {
 function toggleItemDelivery(orderId, idx) {
   const order = orders.find(o => o.id === orderId);
   if (!order || !order.items[idx]) return;
-  if (!canEdit(order)) { alert('Este pedido es de ' + order.createdBy + '.'); return; }
+  if (!canEdit(order)) { showAlert('Este pedido es de ' + order.createdBy + '.'); return; }
   const item = order.items[idx];
   if (item.deliveredQty >= item.quantity) { item.deliveredQty = 0; item.deliveredBy = null; }
   else { item.deliveredQty = item.quantity; item.deliveredBy = userName; }
@@ -830,7 +936,7 @@ function toggleItemDelivery(orderId, idx) {
 function toggleOrderFullDelivery(orderId) {
   const order = orders.find(o => o.id === orderId);
   if (!order) return;
-  if (!canEdit(order)) { alert('Este pedido es de ' + order.createdBy + '.'); return; }
+  if (!canEdit(order)) { showAlert('Este pedido es de ' + order.createdBy + '.'); return; }
   const target = !order.fullyDelivered;
   order.items.forEach(i => { i.deliveredQty = target ? i.quantity : 0; i.deliveredBy = target ? userName : null; });
   refreshDeliveryState(order);
@@ -840,28 +946,30 @@ function toggleOrderFullDelivery(orderId) {
 }
 
 function clearDeliveredOrders() {
-  if (confirm('¿Deseas eliminar tus pedidos completados del listado?')) {
-    orders.filter(o => o.fullyDelivered && canEdit(o)).forEach(o => R('orders/' + o.id).remove());
-  }
+  showConfirm('Limpiar completados', '¿Deseas eliminar tus pedidos completados del listado?', 'Limpiar', ok => {
+    if (ok) {
+      orders.filter(o => o.fullyDelivered && canEdit(o)).forEach(o => R('orders/' + o.id).remove());
+    }
+  });
 }
 
 function updateBadges() {
   const pending = orders.filter(o => !o.fullyDelivered && isMine(o)).length;
-  const ob = $('header-orders-badge');
+  const ob = \$('header-orders-badge');
   ob.textContent = pending;
   ob.classList.toggle('hidden', pending <= 0);
   ob.classList.toggle('flex', pending > 0);
-  const tb = $('header-tabs-badge');
+  const tb = \$('header-tabs-badge');
   tb.textContent = openTabs.length;
   tb.classList.toggle('hidden', openTabs.length <= 0);
   tb.classList.toggle('flex', openTabs.length > 0);
 }
 
 // ==================== PRODUCTOS ====================
-function selectEmoji(e) { $('product-icon').value = e; }
+function selectEmoji(e) { \$('product-icon').value = e; }
 
 function renderConfigProducts() {
-  const list = $('config-products-list');
+  const list = \$('config-products-list');
   list.innerHTML = '';
   products.forEach(p => {
     const item = document.createElement('div');
@@ -873,8 +981,8 @@ function renderConfigProducts() {
           <div class="flex items-center space-x-2 mt-0.5"><span class="text-[10px] bg-amber-100 text-[#1B4D3E] px-1.5 py-0.5 rounded font-medium">${esc(p.category)}</span><span class="text-[11px] font-bold text-slate-600">${eur(p.price)}</span></div></div>
       </div>
       <div class="flex space-x-1">
-        <button onclick="openProductModal(${p.id})" class="p-2 bg-white border hover:bg-slate-100 text-blue-600 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
-        <button onclick="deleteProduct(${p.id})" class="p-2 bg-white border hover:bg-slate-100 text-red-600 rounded-lg text-xs"><i class="fa-solid fa-trash"></i></button>
+        <button onclick="requirePin(()=>openProductModal(${p.id}))" class="p-2 bg-white border hover:bg-slate-100 text-blue-600 rounded-lg text-xs"><i class="fa-solid fa-pen"></i></button>
+        <button onclick="requirePin(()=>deleteProduct(${p.id}))" class="p-2 bg-white border hover:bg-slate-100 text-red-600 rounded-lg text-xs"><i class="fa-solid fa-trash"></i></button>
       </div>`;
     list.appendChild(item);
   });
@@ -882,29 +990,27 @@ function renderConfigProducts() {
 
 function openProductModal(id) {
   if (id) {
-    $('product-modal-title').textContent = 'Editar Producto';
+    \$('product-modal-title').textContent = 'Editar Producto';
     const p = products.find(p => p.id === id);
     if (p) {
-      $('product-id').value = p.id; $('product-name').value = p.name; $('product-price').value = p.price;
+      \$('product-id').value = p.id; $('product-name').value = p.name; $('product-price').value = p.price;
       $('product-category').value = p.category; $('product-icon').value = p.icon;
     }
   } else {
-    $('product-modal-title').textContent = 'Nuevo Producto';
-    $('product-form').reset();
-    $('product-id').value = '';
-    $('product-icon').value = '🥖';
+    $('product-modal-title').textContent = 'Nuevo Producto';$('product-form').reset();
+    $('product-id').value = '';$('product-icon').value = '🥖';
   }
-  $('product-modal').classList.remove('hidden');
+  \$('product-modal').classList.remove('hidden');
 }
-function closeProductModal() { $('product-modal').classList.add('hidden'); }
+function closeProductModal() { \$('product-modal').classList.add('hidden'); }
 
 function saveProduct(e) {
   e.preventDefault();
-  const id = $('product-id').value;
-  const name = $('product-name').value.trim();
-  const price = parseFloat($('product-price').value);
-  const category = $('product-category').value;
-  const icon = $('product-icon').value.trim() || '🍴';
+  const id = \$('product-id').value;
+  const name = \$('product-name').value.trim();
+  const price = parseFloat(\$('product-price').value);
+  const category = \$('product-category').value;
+  const icon = \$('product-icon').value.trim() || '🍴';
   if (id) {
     const i = products.findIndex(p => p.id == id);
     if (i !== -1) products[i] = { id: parseInt(id), name, price, category, icon };
@@ -917,22 +1023,25 @@ function saveProduct(e) {
 }
 
 function deleteProduct(id) {
-  if (confirm('¿Estás seguro de que deseas eliminar este producto?')) {
-    products = products.filter(p => p.id !== id);
-    saveProducts();
-    renderConfigProducts(); renderProducts();
-  }
+  showConfirm('Eliminar producto', '¿Estás seguro de que deseas eliminar este producto?', 'Eliminar', ok => {
+    if (ok) {
+      products = products.filter(p => p.id !== id);
+      saveProducts();
+      renderConfigProducts(); renderProducts();
+    }
+  });
 }
 
 // ==================== CAJA ====================
 function updateSalesSummary() {
   let t = 0;
   salesHistory.forEach(s => t += s.total);
-  $('session-total-sales').textContent = eur(t);
-  $('session-count-sales').textContent = salesHistory.length;
+  $('session-total-sales').textContent = eur(t);$('session-count-sales').textContent = salesHistory.length;
 }
 function resetSalesHistory() {
-  if (confirm('¿Deseas reiniciar el registro de caja de la sesión? Se borrará para todos los dispositivos.')) R('sales').remove();
+  showConfirm('Reiniciar caja', '¿Deseas reiniciar el registro de caja de la sesión? Se borrará para todos los dispositivos.', 'Reiniciar', ok => {
+    if (ok) R('sales').remove();
+  });
 }
 </script>
 </body>
