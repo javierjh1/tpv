@@ -498,10 +498,11 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
         let currentCategoryFilter = 'todos';
 
         let userName = safeGet('hermandad_tpv_user') || '';
-        let ordersView = safeGet('hermandad_tpv_orders_view') || 'mine';
+        let ordersView = 'mine';
         const DELIVERED_TTL = 2 * 60 * 1000;
 
         function sameUser(a, b) { return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); }
+        function isMine(order) { return !!order.createdBy && sameUser(order.createdBy, userName); }
         function canEdit(order) { return !order.createdBy || sameUser(order.createdBy, userName); }
 
         function openNameModal(force) {
@@ -524,7 +525,6 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
         }
         function setOrdersView(v) {
             ordersView = v;
-            safeSet('hermandad_tpv_orders_view', v);
             renderOrders();
         }
         function refreshDeliveryState(order) {
@@ -584,6 +584,7 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
         }
 
         function switchTab(tab) {
+            if (tab === 'orders') ordersView = 'mine';
             const salesTab = document.getElementById('tab-sales-content');
             const cartTab = document.getElementById('tab-cart-content');
             const ordersTab = document.getElementById('tab-orders-content');
@@ -1182,7 +1183,7 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
                 mineBtn.className = 'px-2 py-0.5 rounded-md ' + (ordersView === 'mine' ? 'bg-[#1B4D3E] text-[#D4AF37]' : 'text-slate-600');
                 allBtn.className = 'px-2 py-0.5 rounded-md ' + (ordersView === 'all' ? 'bg-[#1B4D3E] text-[#D4AF37]' : 'text-slate-600');
             }
-            const visibleOrders = ordersView === 'mine' ? orders.filter(canEdit) : orders;
+            const visibleOrders = ordersView === 'mine' ? orders.filter(isMine) : orders;
 
             if (visibleOrders.length === 0) {
                 container.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-clipboard-list text-4xl mb-2"></i><p class="text-xs">No hay pedidos registrados</p></div>`;
@@ -1289,7 +1290,7 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
         }
 
         function updateBadges() {
-            const pendingOrders = orders.filter(o => !o.fullyDelivered && canEdit(o)).length;
+            const pendingOrders = orders.filter(o => !o.fullyDelivered && isMine(o)).length;
             const ordersBadge = document.getElementById('header-orders-badge');
             ordersBadge.textContent = pendingOrders;
             if (pendingOrders > 0) {
