@@ -1479,11 +1479,25 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
                 .forEach(fn => { try { fn(); } catch (e) {} });
         }
 
+        async function fetchJson(url, opts) {
+            let res;
+            try { res = await fetch(url, opts); }
+            catch (e) { throw new Error('Sin internet o enlace bloqueado'); }
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); }
+            catch (e) { throw new Error('El enlace no devuelve datos. Revisa que la implementación esté en "Cualquier persona" y sea la versión nueva'); }
+            if (data && data.error) throw new Error('Error del script: ' + data.error);
+            return data;
+        }
+
         async function syncNow() {
             const url = getSyncUrl();
             if (!url) return;
             if (syncBusy) { syncAgain = true; return; }
             syncBusy = true;
+            const getUrl = () => url + (url.includes('?') ? '&' : '?') + 'action=get&_=' + Date.now();
+            const post = body => fetchJson(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
             try {
                 const toPush = {};
                 for (const c of Object.keys(SYNC_COLS)) {
@@ -1491,11 +1505,10 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
                 }
                 let server;
                 if (Object.keys(toPush).length) {
-                    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(toPush) });
-                    server = (await res.json()).state || {};
+                    const r = await post(toPush);
+                    server = r && r.state ? r.state : await fetchJson(getUrl());
                 } else {
-                    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get&_=' + Date.now());
-                    server = await res.json();
+                    server = await fetchJson(getUrl());
                 }
                 for (const c of Object.keys(toPush)) {
                     if (syncTs[c] === toPush[c].ts) delete syncDirty[c];
@@ -1516,14 +1529,14 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
                     }
                 }
                 if (Object.keys(missing).length) {
-                    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(missing) });
+                    await post(missing);
                     for (const c of Object.keys(missing)) syncTs[c] = missing[c].ts;
                 }
                 persistSyncMeta();
                 if (applied) rerenderAll();
                 setSyncStatus('Última sincronización: ' + new Date().toLocaleTimeString(), true);
             } catch (e) {
-                setSyncStatus('No se pudo conectar. Se reintentará solo.', false);
+                setSyncStatus('No se pudo sincronizar: ' + e.message, false);
             } finally {
                 syncBusy = false;
                 if (syncAgain) { syncAgain = false; syncNow(); }
