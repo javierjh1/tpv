@@ -386,8 +386,8 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
                 <datalist id="existing-tabs-datalist">
                     <!-- Autocompletado dinámico -->
                 </datalist>
-                <div id="existing-tabs-suggestions" class="mt-1 flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                    <!-- Sugerencias rápidas -->
+                <label class="block text-[11px] font-semibold text-slate-600 uppercase mt-3 mb-1">Cuentas abiertas (toca una para añadir)</label>
+                <div id="existing-tabs-suggestions" class="space-y-1 max-h-44 overflow-y-auto pr-1">
                 </div>
             </div>
             <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
@@ -998,36 +998,50 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
             if (total <= 0) return;
             document.getElementById('open-tab-modal-total').textContent = total.toFixed(2).replace('.', ',') + ' €';
             document.getElementById('open-tab-name-input').value = '';
-            
-            const datalist = document.getElementById('existing-tabs-datalist');
-            const suggestionsDiv = document.getElementById('existing-tabs-suggestions');
-            datalist.innerHTML = '';
-            suggestionsDiv.innerHTML = '';
+            renderTabPicker();
+            document.getElementById('open-tab-modal').classList.remove('hidden');
+            try { syncNow(); } catch (e) {}
+        }
 
+        function renderTabPicker() {
+            const box = document.getElementById('existing-tabs-suggestions');
+            const datalist = document.getElementById('existing-tabs-datalist');
+            if (!box) return;
+            const typed = (document.getElementById('open-tab-name-input').value || '').trim().toLowerCase();
+            datalist.innerHTML = '';
+            box.innerHTML = '';
+            if (openTabs.length === 0) {
+                box.innerHTML = '<p class="text-[11px] text-slate-400 py-2 text-center">No hay cuentas abiertas. Escribe un nombre para crear una nueva.</p>';
+                return;
+            }
             openTabs.forEach(tab => {
                 const option = document.createElement('option');
                 option.value = tab.name;
                 datalist.appendChild(option);
 
+                const selected = typed && typed === String(tab.name).toLowerCase();
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = "px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-[#1B4D3E] rounded-lg text-xs font-bold transition";
-                btn.textContent = `${tab.name} (${tab.total.toFixed(2)} €)`;
+                btn.className = 'w-full flex justify-between items-center text-left px-3 py-2 rounded-xl border text-xs transition ' + (selected ? 'bg-[#1B4D3E] text-[#D4AF37] border-[#1B4D3E]' : 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-slate-800');
+                const who = tab.createdBy ? 'Abierta por ' + tab.createdBy : '';
+                const last = tab.lastBy && tab.lastBy !== tab.createdBy ? ' · Añadió ' + tab.lastBy : '';
+                btn.innerHTML = '<span><b class="text-sm"></b><br><span class="text-[10px] opacity-70"></span></span><span class="font-extrabold text-sm"></span>';
+                btn.querySelector('b').textContent = tab.name;
+                btn.querySelectorAll('span')[1].textContent = who + last;
+                btn.querySelectorAll('span')[2].textContent = tab.total.toFixed(2).replace('.', ',') + ' €';
                 btn.onclick = () => {
                     document.getElementById('open-tab-name-input').value = tab.name;
+                    renderTabPicker();
                 };
-                suggestionsDiv.appendChild(btn);
+                box.appendChild(btn);
             });
-
-            document.getElementById('open-tab-modal').classList.remove('hidden');
-            setTimeout(() => document.getElementById('open-tab-name-input').focus(), 100);
         }
 
         function closeOpenTabModal() {
             document.getElementById('open-tab-modal').classList.add('hidden');
         }
 
-        function filterExistingTabs() {}
+        function filterExistingTabs() { renderTabPicker(); }
 
         function confirmSaveOpenTab() {
             const name = document.getElementById('open-tab-name-input').value.trim();
@@ -1041,6 +1055,7 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
 
             if (existingTab) {
                 existingTab.total += total;
+                existingTab.lastBy = userName;
                 for (const [id, qty] of Object.entries(cart)) {
                     const prodId = parseInt(id);
                     const foundItem = existingTab.items.find(i => i.productId === prodId);
@@ -1127,7 +1142,7 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
                                 <span class="bg-amber-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">Cuenta #${tab.id}</span>
                                 <h3 class="font-bold text-slate-900 text-xs">${tab.name}</h3>
                             </div>
-                            <span class="text-[10px] text-slate-400 block mt-0.5"><i class="fa-regular fa-clock mr-1"></i>Iniciada a las ${tab.date}${tab.createdBy ? ' · Abierta por <b>' + tab.createdBy + '</b>' : ''}</span>
+                            <span class="text-[10px] text-slate-400 block mt-0.5"><i class="fa-regular fa-clock mr-1"></i>Iniciada a las ${tab.date}${tab.createdBy ? ' · Abierta por <b>' + tab.createdBy + '</b>' : ''}${tab.lastBy && tab.lastBy !== tab.createdBy ? ' · Añadió <b>' + tab.lastBy + '</b>' : ''}</span>
                         </div>
                         <div class="text-right">
                             <span class="text-sm font-extrabold text-[#1B4D3E] block">${tab.total.toFixed(2)} €</span>
@@ -1460,7 +1475,7 @@ try{if(navigator.storage&&navigator.storage.persist){navigator.storage.persist()
         }
 
         function rerenderAll() {
-            [renderProducts, renderConfigProducts, renderCartDetails, renderOrders, renderOpenTabs, updateCartUI, updateSalesSummary, updateBadges]
+            [renderProducts, renderConfigProducts, renderCartDetails, renderOrders, renderOpenTabs, renderTabPicker, updateCartUI, updateSalesSummary, updateBadges]
                 .forEach(fn => { try { fn(); } catch (e) {} });
         }
 
