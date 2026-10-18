@@ -195,6 +195,7 @@ body{height:100vh!important;height:100dvh!important;height:var(--app-h,100dvh)!i
         <button onclick="openPassModal()" class="bg-white border border-slate-200 rounded-lg py-1.5 text-xs font-bold text-slate-700"><i class="fa-solid fa-key mr-1.5"></i>Cambiar contraseña</button>
         <button onclick="copyProducts()" class="bg-white border border-slate-200 rounded-lg py-1.5 text-xs font-bold text-slate-700"><i class="fa-solid fa-copy mr-1.5"></i>Copiar productos (copia de seguridad)</button>
         <button onclick="adminClearOrders()" class="bg-white border border-red-200 rounded-lg py-1.5 text-xs font-bold text-red-600"><i class="fa-solid fa-trash mr-1.5"></i>Borrar TODOS los pedidos</button>
+        <button onclick="adminRenumberTickets()" class="bg-white border border-slate-200 rounded-lg py-1.5 text-xs font-bold text-slate-700"><i class="fa-solid fa-arrow-down-1-9 mr-1.5"></i>Renumerar entradas (1, 2, 3…)</button>
         <button onclick="adminClearTabs()" class="bg-white border border-red-200 rounded-lg py-1.5 text-xs font-bold text-red-600"><i class="fa-solid fa-trash mr-1.5"></i>Borrar TODAS las cuentas abiertas</button>
         <button onclick="adminClearHistory()" class="bg-white border border-red-200 rounded-lg py-1.5 text-xs font-bold text-red-600"><i class="fa-solid fa-trash mr-1.5"></i>Borrar el historial</button>
       </div>
@@ -676,16 +677,25 @@ function setSync(ok, msg) {
   $('sync-status').textContent = msg || '';
 }
 
+let counters = {};
+const reserved = {};
 async function nextId(name) {
   const taken = new Set();
   if (name === 'orders') orders.forEach(o => taken.add(o.id));
   else if (name.startsWith('ticket_')) { const ev = parseInt(name.slice(7)); tickets.forEach(t => { if (t.eventId === ev) taken.add(t.no); }); }
+  // número estimado con lo que ya sabe este dispositivo (por si el servidor tarda)
+  let est = Math.max(counters[name] || 0, reserved[name] || 0) + 1;
+  while (taken.has(est)) est++;
+  reserved[name] = est;
   const t = R('counters/' + name).transaction(n => { let v = (n || 0) + 1; while (taken.has(v)) v++; return v; }).then(r => r.snapshot.val());
-  const f = new Promise(res => setTimeout(() => res(Date.now() % 10000000), 3000));
-  return Promise.race([t, f]);
+  const f = new Promise(res => setTimeout(() => res(est), 8000));
+  const id = await Promise.race([t, f]);
+  if (id > (reserved[name] || 0)) reserved[name] = id;
+  return id;
 }
 
 function resetTicketCounters() {
+  Object.keys(reserved).forEach(k => { delete reserved[k]; });
   const ids = new Set(products.filter(p => p.presale).map(p => p.id));
   tickets.forEach(t => ids.add(t.eventId));
   ids.forEach(id => R('counters/ticket_' + id).set(0));
@@ -719,6 +729,8 @@ function startListening() {
   RL('config/pin').on('value', s => { tpvPin = s.val() ? String(s.val()) : '123'; });
 
   RL('config/presale').on('value', s => { presaleOn = s.val() === true; applyPresaleUI(); });
+
+  RL('counters').on('value', s => { counters = s.val() || {}; });
 
   RL('tickets').on('value', s => {
     const a = [];
@@ -1059,10 +1071,10 @@ async function confirmPresaleAcct() {
   const total = Math.round(p.price * qty * 100) / 100;
   const key = tk(acct);
   addToTab(acct, [{ productId: p.id, quantity: qty }], total);
-  for (const name of names) {
-    const no = await nextId('ticket_' + p.id);
-    R('tickets').push(JSON.stringify({ eventId: p.id, event: p.name, eventDate: p.date || '', name, no, price: p.price, by: userName, ts: Date.now(), date: new Date().toLocaleString(), customer: acct, paid: false, tabKey: key, account: acct }));
-  }
+  const nos = await Promise.all(names.map(() => nextId('ticket_' + p.id)));
+  names.forEach((name, i) => {
+    R('tickets').push(JSON.stringify({ eventId: p.id, event: p.name, eventDate: p.date || '', name, no: nos[i], price: p.price, by: userName, ts: Date.now(), date: new Date().toLocaleString(), customer: acct, paid: false, tabKey: key, account: acct }));
+  });
   logHistory(null, acct, 'cuenta', total, { [p.id]: qty });
   closePresaleAcct();
   switchTab('presale');
@@ -1200,6 +1212,25 @@ function setAdmin(v) {
 function toggleAdmin() { if (isAdmin) setAdmin(false); else requirePin(() => setAdmin(true)); }
 function adminDeleteOrder(id) { if (isAdmin && confirm('¿Eliminar el pedido #' + id + '?')) R('orders/' + id).remove(); }
 function adminClearOrders() { if (isAdmin && confirm('¿Borrar TODOS los pedidos de TODOS los dispositivos?')) R('orders').remove(); }
+function adminRenumberTickets() {
+  if (!isAdmin || !tickets.length) { if (isAdmin) alert('No hay entradas vendidas.'); return; }
+  if (!confirm('¿Renumerar todas las entradas desde el 1, en orden de venta, dentro de cada evento?')) return;
+  const byEv = {};
+  tickets.forEach(t => { (byEv[t.eventId] = byEv[t.eventId] || []).push(t); });
+  Object.keys(byEv).forEach(ev => {
+    const arr = byEv[ev].slice().sort((a, b) => (a.ts || 0) - (b.ts || 0) || (a.no || 0) - (b.no || 0));
+    arr.forEach((t, i) => {
+      if (t.no === i + 1) return;
+      const n = { ...t };
+      delete n.key;
+      n.no = i + 1;
+      R('tickets/' + t.key).set(JSON.stringify(n));
+    });
+    R('counters/ticket_' + ev).set(arr.length);
+  });
+  Object.keys(reserved).forEach(k => { delete reserved[k]; });
+  alert('Hecho. Las entradas están numeradas desde el 1.');
+}
 function adminClearHistory() { if (isAdmin && confirm('¿Borrar TODO el historial de pedidos? También se reinician los números de las entradas.')) { R('history').remove(); resetTicketCounters(); } }
 function adminClearTabs() {
   const n = tickets.filter(t => t.paid === false && t.tabKey).length;
@@ -1455,6 +1486,7 @@ function saveDirectQuantity() {
 
 // ==================== COBRO ====================
 function openCheckoutModal(preset) {
+  $('complete-sale-btn').querySelector('span').textContent = 'Completar Venta y Crear Pedido';
   const { total } = getCartTotal();
   if (total <= 0) return;
   $('modal-total-display').textContent = eur(total);
@@ -1515,6 +1547,7 @@ function calculateChange() {
 
 async function completeSale() {
   $('complete-sale-btn').setAttribute('disabled', 'true');
+  $('complete-sale-btn').querySelector('span').textContent = 'Guardando...';
   const tabKey = payingTabKey;
   const presaleMode = payingPresale, savedCart = presaleSavedCart;
   const { total } = getCartTotal();
@@ -1547,13 +1580,13 @@ async function completeSale() {
   logHistory(id, customer, tabKey ? 'cobro-cuenta' : 'cobro', total, snap);
 
   const made = [];
-  for (const x of tixNames) {
+  const nos = await Promise.all(tixNames.map(x => nextId('ticket_' + x.pid)));
+  tixNames.forEach((x, i) => {
     const p = products.find(y => y.id === x.pid);
-    const no = await nextId('ticket_' + x.pid);
-    const rec = { eventId: x.pid, event: p ? p.name : 'Preventa', eventDate: p && p.date ? p.date : '', name: x.name, no, price: p ? p.price : 0, by: userName, ts: Date.now(), date: new Date().toLocaleString(), customer, paid: true, paidAt: Date.now() };
+    const rec = { eventId: x.pid, event: p ? p.name : 'Preventa', eventDate: p && p.date ? p.date : '', name: x.name, no: nos[i], price: p ? p.price : 0, by: userName, ts: Date.now(), date: new Date().toLocaleString(), customer, paid: true, paidAt: Date.now() };
     R('tickets').push(JSON.stringify(rec));
     made.push(rec);
-  }
+  });
 
   const head = tabKey ? 'Cuenta' : hasOrder ? 'Pedido #' + id : 'Preventa';
   let t = `<p class="font-bold text-center mb-1">--- GJ HDAD. BORRIQUITA ---</p>`;
