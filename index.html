@@ -1150,10 +1150,12 @@ const b64uEnc = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace
 const b64uDec = t => { t = String(t).replace(/-/g, '+').replace(/_/g, '/'); while (t.length % 4) t += '='; return Uint8Array.from(atob(t), c => c.charCodeAt(0)); };
 const pkRand = () => crypto.getRandomValues(new Uint8Array(32));
 const pkMsg = m => { const e = $('passkey-msg'); if (e) e.textContent = m || ''; };
+const pkLocalIds = () => { try { return JSON.parse(localStorage.getItem('tpv_pk_ids') || '[]') || []; } catch (e) { return []; } };
+const pkLocalAdd = id => { try { const l = pkLocalIds(); if (l.indexOf(id) < 0) l.push(id); localStorage.setItem('tpv_pk_ids', JSON.stringify(l)); } catch (e) {} };
 function pkError(e) {
   if (e && (e.name === 'NotAllowedError' || e.name === 'AbortError')) return 'Cancelado.';
   if (e && e.name === 'InvalidStateError') return 'Este móvil ya tiene el desbloqueo activado.';
-  return 'No se pudo: ' + ((e && e.message) || e);
+  return 'No se pudo activar. Comprueba que el móvil tiene bloqueo de pantalla (huella, patrón o PIN), que tienes una cuenta de Google en el móvil con el gestor de contraseñas de Google activado y que Chrome y los servicios de Google Play están actualizados. (' + ((e && e.name) || 'error') + ')';
 }
 function updatePasskeyUI() {
   const cu = curUser(), a = $('passkey-add'), d = $('passkey-del');
@@ -1169,18 +1171,26 @@ async function registerPasskey() {
   if (!cu || !PASSKEY_OK) return;
   pkMsg('');
   try {
-    const cred = await navigator.credentials.create({ publicKey: {
+    const mk = (attach, resident) => ({ publicKey: {
       challenge: pkRand(),
       rp: { name: 'Borriquita TPV', id: location.hostname },
       user: { id: new TextEncoder().encode(cu.id), name: fullName(cu), displayName: fullName(cu) },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'required', userVerification: 'required' },
+      authenticatorSelection: Object.assign({ residentKey: resident, userVerification: 'required' }, attach ? { authenticatorAttachment: 'platform' } : {}),
       timeout: 60000
     } });
+    // Algunos móviles Android fallan con "credential manager" si se exige clave visible; se prueban opciones más compatibles.
+    const tries = [mk(true, 'required'), mk(true, 'discouraged'), mk(false, 'discouraged')];
+    let cred = null, last = null;
+    for (const t of tries) {
+      try { cred = await navigator.credentials.create(t); break; }
+      catch (e) { last = e; if (e && (e.name === 'NotAllowedError' || e.name === 'AbortError' || e.name === 'InvalidStateError')) throw e; }
+    }
+    if (!cred) throw last;
     if (!cred.response.getPublicKey) { pkMsg('Este navegador no es compatible. Actualízalo.'); return; }
     const entry = { id: b64uEnc(cred.rawId), pk: b64uEnc(cred.response.getPublicKey()), created: Date.now() };
     users = users.map(u => u.id === cu.id ? { ...u, passkeys: (u.passkeys || []).concat([entry]) } : u);
-    saveUsers(); updatePasskeyUI();
+    saveUsers(); updatePasskeyUI(); pkLocalAdd(entry.id);
     pkMsg('Listo: la próxima vez puedes entrar con el móvil.');
   } catch (e) { pkMsg(pkError(e)); }
 }
@@ -1210,7 +1220,8 @@ async function loginWithPasskey() {
   err('');
   try {
     const challenge = pkRand();
-    const cred = await navigator.credentials.get({ publicKey: { challenge, rpId: location.hostname, userVerification: 'required', timeout: 60000 } });
+    const local = pkLocalIds().map(i => ({ type: 'public-key', id: b64uDec(i) }));
+    const cred = await navigator.credentials.get({ publicKey: Object.assign({ challenge, rpId: location.hostname, userVerification: 'required', timeout: 60000 }, local.length ? { allowCredentials: local } : {}) });
     const id = b64uEnc(cred.rawId);
     const u = users.find(x => (x.passkeys || []).some(k => k.id === id));
     if (!u) return err('Este móvil no está registrado. Entra con tu contraseña y actívalo en Mi cuenta.');
